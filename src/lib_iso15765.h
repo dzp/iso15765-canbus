@@ -32,7 +32,7 @@ SOFTWARE.
 #ifndef DEVCOONS_ISO15765_2_H_
 #define DEVCOONS_ISO15765_2_H_
 
-#define I15765_MSG_SIZE		516	/* Max. size of the TP up to 4095 bytes */
+#define I15765_MSG_SIZE		4096	/* Max. size of the TP up to 4095 bytes */
 
 #define I15765_QUEUE_ELMS	64	/* No. of max incoming frames that the
 					 * reception buffer can hold */
@@ -337,13 +337,6 @@ typedef struct ALIGNMENT
 }n_chg_param_cfm_t;
 
 
-typedef enum
-{
-	N_INDN = 0x01,		/* N_USData.indication */
-	N_FF_INDN = 0x02,	/* N_USData_FF.indication */
-	N_CONF = 0x03,		/* N_USData.confirm */
-	N_CHG_P_CONF = 0x04	/* N_ChangeParameter.confirm */
-}signal_tp;
 
 /* --- Callbacks  ---------------------------------------------------------- */
 
@@ -422,13 +415,13 @@ typedef struct ALIGNMENT
 * Declaration | Public Functions
 ******************************************************************************/
 
-n_rslt iso15765_init(iso15765_t* instance);
+__declspec(dllexport) n_rslt iso15765_init(iso15765_t* instance);
 
-n_rslt iso15765_send(iso15765_t* instance, n_req_t* frame);
+__declspec(dllexport) n_rslt iso15765_send(iso15765_t* instance, n_req_t* frame);
 
-n_rslt iso15765_enqueue(iso15765_t* instance, canbus_frame_t* frame);
+__declspec(dllexport) n_rslt iso15765_enqueue(iso15765_t* instance, canbus_frame_t* frame);
 
-n_rslt iso15765_process(iso15765_t* instance);
+__declspec(dllexport) n_rslt iso15765_process(iso15765_t* instance);
 
 /******************************************************************************
 * EOF - NO CODE AFTER THIS LINE
