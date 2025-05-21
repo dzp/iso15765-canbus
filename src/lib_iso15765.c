@@ -4,26 +4,28 @@
 @t.odo	-
 ---------------------------------------------------------------------------
 
-MIT License
-Copyright (c) 2020 Io. D (Devcoons.com)
+GNU Affero General Public License v3.0  
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Copyright (c) 2024 Ioannis D. (devcoons)  
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This program is free software: you can redistribute it and/or modify it 
+under the terms of the GNU Affero General Public License as published by 
+the Free Software Foundation, either version 3 of the License.  
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This program is distributed in the hope that it will be useful,  
+but WITHOUT ANY WARRANTY; without even the implied warranty of  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the  
+GNU Affero General Public License for more details.  
+
+You should have received a copy of the GNU Affero General Public License  
+along with this program. If not, see <https://www.gnu.org/licenses/>.  
+
+For commercial use, including proprietary or for-profit applications, 
+a separate license is required. Contact:  
+
+- GitHub: [https://github.com/devcoons](https://github.com/devcoons)  
+- Email: i_-_-_s@outlook.com 
+
 */
 /******************************************************************************
 * Preprocessor Definitions & Macros
@@ -75,6 +77,20 @@ static void cfm(n_cfm_t* info)
 static void cfg_cfm(n_chg_param_cfm_t* info)
 {
 	ISO_15675_UNUSED(info);
+}
+
+/*
+ * Helper function to check if time interval has passed from a given time.
+ */
+inline static n_rslt has_interval_passed(uint32_t current_time, uint32_t last_time, uint32_t interval)
+{
+    if ((interval == 0U) || (interval >= UINT32_MAX))
+    {
+        return N_ERROR;
+    }
+
+    uint32_t elapsed_time = current_time - last_time;
+	return (elapsed_time >= interval) ? N_OK : N_INV;
 }
 
 /*
@@ -132,6 +148,13 @@ inline static uint8_t n_get_closest_can_dl(uint8_t size, cbus_fr_format tmt)
  */
 inline static uint8_t n_get_dt_offset(addr_md address, pci_type pci, uint16_t data_size)
 {
+	if (address	!= N_ADM_NORMAL && address != N_ADM_FIXED 
+	&& address != N_ADM_MIXED11 && address != N_ADM_EXTENDED 
+	&& address != N_ADM_MIXED29)
+	{
+		return 0xFF;
+	}
+
 	uint8_t offset = (address & 0x01);
 
 	switch (pci)
@@ -151,7 +174,7 @@ inline static uint8_t n_get_dt_offset(addr_md address, pci_type pci, uint16_t da
 		offset += 3;
 		break;
 	default:
-		offset = 0;
+		offset = 0xFF;
 		break;
 	}
 	return offset;
@@ -263,7 +286,7 @@ inline static n_rslt n_pci_unpack(addr_md mode, n_pdu_t* n_pdu, uint8_t dlc, uin
             case N_PCI_T_SF:
                 // Conditional operation based on 'dlc', not dead code
                 n_pdu->n_pci.dl = (dlc <= 8U) ? (uint8_t)(dt[offs] & 0x0FU) : dt[1U + offs];
-                result = N_OK;
+                result = n_pdu->n_pci.dl > dlc ? N_ERROR : N_OK;
                 break;
 
             case N_PCI_T_CF:
@@ -284,7 +307,8 @@ inline static n_rslt n_pci_unpack(addr_md mode, n_pdu_t* n_pdu, uint8_t dlc, uin
                 // Sequential assignments based on protocol, clearly used
                 n_pdu->n_pci.fs = (uint8_t)(dt[offs] & 0x0FU);
                 n_pdu->n_pci.bs = dt[1U + offs];
-                n_pdu->n_pci.st = dt[2U + offs];
+                n_pdu->n_pci.st = dt[2U + offs] <= 0x7F ? dt[2U + offs] :
+								  ((dt[2U + offs]>= 0xF1 && dt[2U + offs]<=0xF9) ? 1 : 127);
                 n_pdu->sz = dlc - (3U + offs); // Adjust for correct data length calculation
                 result = N_OK;
                 break;
@@ -304,29 +328,39 @@ inline static n_rslt n_pci_unpack(addr_md mode, n_pdu_t* n_pdu, uint8_t dlc, uin
 inline static n_rslt n_pdu_pack_dt(addr_md mode, n_pdu_t* n_pdu, uint8_t* dt)
 {
 	n_rslt result = N_ERROR;
+	uint8_t offset = 0xFF;
 
 	if (dt != NULL)
 	{
 		switch (n_pdu->n_pci.pt)
 		{
 		case N_PCI_T_SF:
-			memmove(&n_pdu->dt[n_get_dt_offset(mode, N_PCI_T_SF, n_pdu->sz)], dt, n_pdu->sz);
+			offset = n_get_dt_offset(mode, N_PCI_T_SF, n_pdu->sz);
 			break;
 		case N_PCI_T_FF:
-			memmove(&n_pdu->dt[n_get_dt_offset(mode, N_PCI_T_FF, n_pdu->sz)], dt, n_pdu->sz);
+			offset = n_get_dt_offset(mode, N_PCI_T_FF, n_pdu->sz);
 			break;
 		case N_PCI_T_CF:
-			memmove(&n_pdu->dt[n_get_dt_offset(mode, N_PCI_T_CF, n_pdu->sz)], dt, n_pdu->sz);
+			offset = n_get_dt_offset(mode, N_PCI_T_CF, n_pdu->sz);
 			break;
 		case N_PCI_T_FC:
-			memmove(&n_pdu->dt[n_get_dt_offset(mode, N_PCI_T_FC, n_pdu->sz)], dt, n_pdu->sz);
-
+			offset = n_get_dt_offset(mode, N_PCI_T_FC, n_pdu->sz);
 			break;
-
 		default:
+			offset = 0xFF;
 			break;
 		}
-		result = N_OK;
+
+		if (offset == 0xFF)
+		{
+			result = N_ERROR;
+		}
+		else 
+		{
+			memmove(&n_pdu->dt[offset], dt, n_pdu->sz);
+			result = N_OK;			
+		}
+		
 	}
 	return result;
 }
@@ -337,30 +371,44 @@ inline static n_rslt n_pdu_pack_dt(addr_md mode, n_pdu_t* n_pdu, uint8_t* dt)
 inline static n_rslt n_pdu_unpack_dt(addr_md mode, n_pdu_t* n_pdu, uint8_t* dt)
 {
 	n_rslt result = N_ERROR;
+	uint8_t offset = 0xFF;
+	uint16_t sz = 0;
 
 	if ((n_pdu != NULL) && (dt != NULL))
 	{
 		switch (n_pdu->n_pci.pt)
 		{
 		case N_PCI_T_SF:
-			memmove(n_pdu->dt, &dt[n_get_dt_offset(mode, N_PCI_T_SF, n_pdu->n_pci.dl)], n_pdu->n_pci.dl);
-			result = N_OK;
+			offset = n_get_dt_offset(mode, N_PCI_T_SF, n_pdu->n_pci.dl);
+			sz = n_pdu->n_pci.dl;
 			break;
 		case N_PCI_T_FF:
-			memmove(n_pdu->dt, &dt[n_get_dt_offset(mode, N_PCI_T_FF, n_pdu->sz)], n_pdu->sz);
-			result = N_OK;
+			offset = n_get_dt_offset(mode, N_PCI_T_FF, n_pdu->n_pci.dl);
+			sz = n_pdu->sz;
 			break;
 		case N_PCI_T_CF:
-			memmove(n_pdu->dt, &dt[n_get_dt_offset(mode, N_PCI_T_CF, n_pdu->sz)], n_pdu->sz);
-			result = N_OK;
+			offset = n_get_dt_offset(mode, N_PCI_T_CF, n_pdu->n_pci.dl);
+			sz = n_pdu->sz;
 			break;
 		case N_PCI_T_FC:
-			memmove(n_pdu->dt, &dt[n_get_dt_offset(mode, N_PCI_T_FC, n_pdu->sz)], n_pdu->sz);
-			result = N_OK;
+			offset = n_get_dt_offset(mode, N_PCI_T_FC, n_pdu->n_pci.dl);
+			sz = n_pdu->sz;
 			break;
 		default:
+			offset = 0xFF;
+			sz = 0;
 			result = N_ERROR;
 			break;
+		}
+
+		if (offset == 0xFF)
+		{
+			result = N_ERROR;
+		}
+		else 
+		{
+			memmove(n_pdu->dt, &dt[offset], sz);
+			result = N_OK;			
 		}
 	}
 	return result;
@@ -379,9 +427,13 @@ inline static n_rslt n_pdu_pack(addr_md mode, n_pdu_t* n_pdu, uint32_t* id, uint
     switch (mode)
     {
         case N_ADM_EXTENDED:
-            n_pdu->dt[0] = n_pdu->n_ai.n_ta;
-            /* Fall through intentionally to N_ADM_NORMAL */
-            /* Falls through */
+        	*id = 0x80U
+                | (n_pdu->n_ai.n_pr << 8)
+                | (n_pdu->n_ai.n_ae << 3)
+                | (n_pdu->n_ai.n_sa) 
+                | ((n_pdu->n_ai.n_tt == N_TA_T_PHY) ? 0x40U : 0x00U); 
+				n_pdu->dt[0] = n_pdu->n_ai.n_ta;
+			break;
         case N_ADM_NORMAL:
             *id = 0x80U
                 | (n_pdu->n_ai.n_pr << 8)
@@ -414,8 +466,11 @@ inline static n_rslt n_pdu_pack(addr_md mode, n_pdu_t* n_pdu, uint32_t* id, uint
             return N_ERROR;
     }
 
-    n_pci_pack(mode, n_pdu, dt);
-    return n_pdu_pack_dt(mode, n_pdu, dt);
+    if (n_pci_pack(mode, n_pdu, dt) == N_OK)
+	{
+    	return n_pdu_pack_dt(mode, n_pdu, dt);
+	}
+	return N_ERROR;
 }
 
 /*
@@ -432,6 +487,9 @@ inline static n_rslt n_pdu_unpack(addr_md mode, n_pdu_t* n_pdu, uint32_t id, uin
 	{
 	case N_ADM_MIXED11:
 		n_pdu->n_ai.n_ae = dt[0];
+#ifdef fallthrough
+		__attribute__((fallthrough));
+#endif
 	case N_ADM_NORMAL:
 		n_pdu->n_ai.n_pr = (uint8_t)((id & 0x700U) >> 8);
 		n_pdu->n_ai.n_ta = (uint8_t)((id & 0x38U) >> 3);
@@ -453,19 +511,20 @@ inline static n_rslt n_pdu_unpack(addr_md mode, n_pdu_t* n_pdu, uint32_t id, uin
 		break;
 	case N_ADM_EXTENDED:
 		n_pdu->n_ai.n_pr = (uint8_t)((id & 0x700U) >> 8);
-		n_pdu->n_ai.n_ta = (uint8_t)((id & 0x38U) >> 3);
+		n_pdu->n_ai.n_ae = (uint8_t)((id & 0xF8U) >> 3);
 		n_pdu->n_ai.n_sa = (uint8_t)(id & 0x07U);
 		n_pdu->n_ai.n_tt = (uint8_t)((id & 0x40U) >> 6 == 1 ? N_TA_T_PHY : N_TA_T_FUNC);
-		n_pdu->n_ai.n_ae = dt[0];
+		n_pdu->n_ai.n_ta = dt[0];
 		break;
 	default:
 		return N_UNE_PDU;
 	}
 
-	n_pci_unpack(mode, n_pdu, dlc, dt);
-	n_pdu_unpack_dt(mode, n_pdu, dt);
-
-	return N_OK;
+	if (n_pci_unpack(mode, n_pdu, dlc, dt) == N_OK)
+	{
+		return n_pdu_unpack_dt(mode, n_pdu, dt);
+	}
+	return N_ERROR;
 }
 
 /*
@@ -515,11 +574,18 @@ inline static void signaling(signal_tp tp, n_iostream_t* strm, void(*cb)(void*),
  */
 inline static n_rslt process_timeouts(iso15765_t* ih)
 {
-	if (ih->out.sts != N_S_TX_WAIT_FC || ih->out.last_upd.n_bs == 0 || ih->config.n_bs == 0
-		|| (ih->out.last_upd.n_bs + ih->config.n_bs) >= ih->clbs.get_ms())
+	if (ih->out.sts != N_S_TX_WAIT_FC || ih->out.last_upd.n_bs == 0 || ih->config.n_bs == 0)
 	{
 		return N_OK;
 	}
+
+	n_rslt timeout = has_interval_passed(ih->clbs.get_ms(),ih->out.last_upd.n_bs,ih->config.n_bs);
+
+	if(timeout == N_INV)
+	{
+		return N_OK;
+	}
+	
 
 	/* if timeout occures then reset the counters and report to the upper layer */
 	ih->out.cf_cnt = 0x0;
@@ -586,7 +652,7 @@ inline static n_rslt check_max_wf_capacity(iso15765_t* ih)
  * Process inbound First Frame reception and report to the upper layer using the
  * indication callback function.
  */
-static n_rslt process_in_ff(iso15765_t* ih, canbus_frame_t* frame)
+static n_rslt process_in_ff(iso15765_t* ih)
 {
 	if (ih->in.msg_sz > I15765_MSG_SIZE)
 	{
@@ -617,7 +683,7 @@ static n_rslt process_in_ff(iso15765_t* ih, canbus_frame_t* frame)
  * Process inbound Single Frame reception and report to the upper layer using the
  * indication callback function.
  */
-static n_rslt process_in_sf(iso15765_t* ih, canbus_frame_t* frame)
+static n_rslt process_in_sf(iso15765_t* ih)
 {
 	/* If reception is in progress: Terminate the current reception, report an
 	* N_USData.indication, with <N_Result> set to N_UNEXP_PDU, to the upper layer, and
@@ -638,7 +704,7 @@ static n_rslt process_in_sf(iso15765_t* ih, canbus_frame_t* frame)
  * to (ref: iso15765-2 p.26) and if everything is ok copy all the data to the
  * inbound stream buffer and update the reception parameters (CF_cnt,timeouts etc)
  */
-static n_rslt process_in_cf(iso15765_t* ih, canbus_frame_t* frame)
+static n_rslt process_in_cf(iso15765_t* ih)
 {
 	n_rslt rslt = N_OK;
 
@@ -652,12 +718,13 @@ static n_rslt process_in_cf(iso15765_t* ih, canbus_frame_t* frame)
 
 	/* Increase the CF counter and check if the reception sequence is ok */
 	ih->in.cf_cnt = ih->in.cf_cnt + 1 > 0xFF ? 0 : ih->in.cf_cnt + 1;
-	if ((ih->in.cf_cnt & 0x0f) != ih->in.pdu.n_pci.sn)
+	ih->in.sn_glb = (ih->in.sn_glb + 1) & 0x0F;
+	if (ih->in.sn_glb != ih->in.pdu.n_pci.sn)
 	{
 		rslt = N_INV_SEQ_NUM;
 		goto in_cf_error;
 	}
-
+	
 	/* As long as everything is ok the we copy the frame data to the inbound
 	* stream buffer. Afterwards check if the message size is completed and
 	* signal the user and afterwards reset the inboud stream */
@@ -695,7 +762,7 @@ in_cf_error:
  * Process inbound Flow Control Frames. Outcome depends on the stream status
  * (if it is busy etc) as well as the Flow Control Status.
  */
-static n_rslt process_in_fc(iso15765_t* ih, canbus_frame_t* frame)
+static n_rslt process_in_fc(iso15765_t* ih)
 {
 	n_rslt rslt = N_UNE_PDU;
 
@@ -759,13 +826,13 @@ inline static n_rslt iso15765_process_in(iso15765_t* ih, canbus_frame_t* frame)
 		switch (ih->in.pdu.n_pci.pt)
 		{
 		case N_PCI_T_FC:
-			return process_in_fc(ih, frame);
+			return process_in_fc(ih);
 		case N_PCI_T_CF:
-			return process_in_cf(ih, frame);
+			return process_in_cf(ih);
 		case N_PCI_T_SF:
-			return process_in_sf(ih, frame);
+			return process_in_sf(ih);
 		case N_PCI_T_FF:
-			return process_in_ff(ih, frame);
+			return process_in_ff(ih);
 		default:
 			break;
 		}
@@ -790,7 +857,8 @@ static n_rslt iso15765_process_out(iso15765_t* ih)
 
 	uint32_t id;
 	n_rslt rslt = N_ERROR;
-
+	n_rslt timeout = N_ERROR;
+	
 	/* Find the PCI type of the pending outbound stream */
 	ih->out.pdu.n_pci.pt = n_out_frame_type(ih);
 
@@ -832,15 +900,21 @@ static n_rslt iso15765_process_out(iso15765_t* ih)
 
 	case N_PCI_T_CF:
 		/* if the minimun difference between transmissions is not reached then skip */
-		if ((ih->out.last_upd.n_cs + ih->config.stmin) > ih->clbs.get_ms())
+		timeout = has_interval_passed(ih->clbs.get_ms(), ih->out.last_upd.n_cs, ih->out.stmin);
+		if (timeout == N_INV)
 		{
 			return N_OK;
+		} 
+		else if (timeout == N_ERROR)
+		{
+			return N_ERROR;
 		}
 			
 		/* Increase the sequence number of the frame and the CF counter of the stream
 		* and then pack the PDU to a CANBus frame */
-		ih->out.pdu.n_pci.sn = ih->out.cf_cnt & 0x0F;
-		ih->out.cf_cnt = ih->out.cf_cnt == 0xFF ? 0 : ih->out.cf_cnt + 1;
+		ih->out.pdu.n_pci.sn = ih->out.sn_glb;
+		ih->out.sn_glb = (ih->out.sn_glb + 1) & 0x0F;
+
 		if (ih->out.fr_fmt == CBUS_FR_FRM_STD)
 		{
 			uint8_t max_payload = (ih->addr_md & 0x01) == 0 ? 7 : 6;
@@ -864,11 +938,12 @@ static n_rslt iso15765_process_out(iso15765_t* ih)
 
 		/* if after this frame we expect a Flow Control then assign the correct flag before the
 		* transmission to avoid any issues and start the timer */
-		if (ih->out.pdu.n_pci.sn == ih->config.bs)
+		if (ih->out.cf_cnt == ih->out.cfg_bs)
 		{
 			ih->out.sts = N_S_TX_WAIT_FC;
 			ih->out.last_upd.n_bs = ih->clbs.get_ms();
 		}
+		ih->out.cf_cnt = ih->out.cf_cnt == 0xFF ? 0 : ih->out.cf_cnt + 1;
 		/* send the canbus frame! */
 		uint8_t of1 = (ih->addr_md & 0x01) == 0 ? 1 : 2;
 		rslt = ih->clbs.send_frame(ih->fr_id_type, id, ih->out.fr_fmt, n_get_closest_can_dl(ih->out.pdu.sz + of1, ih->out.fr_fmt), ih->out.pdu.dt) == 0 ? N_OK : N_ERROR;
@@ -948,14 +1023,18 @@ n_rslt iso15765_init(iso15765_t* instance)
 	memset(&instance->out, 0, sizeof(n_iostream_t));
 	memset(&instance->fl_pdu, 0, sizeof(n_pdu_t));
 	/* init the incoming canbus frame queue(buffer) */
-	iqueue_init(&instance->inqueue,
+	if (iqueue_init(&instance->inqueue,
 		I15765_QUEUE_ELMS,
 		sizeof(canbus_frame_t),
-		instance->inq_buf);
+		instance->inq_buf) != I_OK)
+		{
+			return N_INV;
+		}
 
 	ISO_15675_UNUSED(sgn_chg_cfm);
 
-	return N_OK;
+	instance->init_sts = N_OK;
+	return instance->init_sts;
 }
 
 /*
@@ -965,6 +1044,39 @@ n_rslt iso15765_init(iso15765_t* instance)
  */
 n_rslt iso15765_enqueue(iso15765_t* instance, canbus_frame_t* frame)
 {
+	if (instance == NULL || frame == NULL)
+	{
+		return N_NULL;
+	}
+
+	if (instance->init_sts != N_OK)
+	{
+		return N_ERROR;
+	}
+
+	if (frame->fr_format == CBUS_FR_FRM_STD)
+	{
+		if (frame->dlc == 0 || frame->dlc > 8)
+		{
+			return N_ERROR;
+		}
+	}
+	else if (frame->fr_format == CBUS_FR_FRM_FD)
+	{
+		if (frame->dlc == 0 ||
+			(frame->dlc > 8 && frame->dlc != 12 && frame->dlc != 16 &&
+			frame->dlc != 20 && frame->dlc != 24 && frame->dlc != 32 &&
+			frame->dlc != 48 && frame->dlc != 64))
+		{
+			return N_ERROR;
+		}
+	}
+	else 
+	{
+		return N_ERROR;
+	}
+
+
 	return iqueue_enqueue(&instance->inqueue, frame) == I_OK
 		? N_OK : N_BUFFER_OVFLW;
 }
@@ -976,6 +1088,16 @@ n_rslt iso15765_enqueue(iso15765_t* instance, canbus_frame_t* frame)
  */
 n_rslt iso15765_send(iso15765_t* instance, n_req_t* frame)
 {
+	if (instance == NULL)
+	{
+		return N_NULL;
+	}
+
+	if (instance->init_sts != N_OK)
+	{
+		return N_ERROR;
+	}
+
 	/* Make sure that there is no transmission in progress */
 	if (instance->out.sts != N_S_IDLE)
 	{
@@ -986,12 +1108,30 @@ n_rslt iso15765_send(iso15765_t* instance, n_req_t* frame)
 	{
 		return N_BUFFER_OVFLW;
 	}
+	/* or there is not actual message to be sent */
+	if (frame->msg_sz == 0)
+	{
+		return N_INV_REQ_SZ;
+	}
+	/* check if frame type is correct */
+	if (frame->fr_fmt != CBUS_FR_FRM_STD && frame->fr_fmt != CBUS_FR_FRM_FD)
+	{
+		return N_INV;
+	}
+	/* check if Target Address Type is correct */
+	if (frame->n_ai.n_tt != N_TA_T_PHY && frame->n_ai.n_tt != N_TA_T_FUNC)
+	{
+		return N_INV;
+	}
 
 	/* copy all the info and data to the outbound buffer */
 	instance->out.fr_fmt = frame->fr_fmt;
 	instance->out.msg_sz = frame->msg_sz;
 	memmove(instance->out.msg, frame->msg, frame->msg_sz);
 	memmove(&instance->out.pdu.n_ai, &frame->n_ai, sizeof(n_ai_t));
+	instance->out.sn_glb = 1;
+	instance->out.cf_cnt = 0;
+	instance->out.wf_cnt = 0;
 	instance->out.sts = N_S_TX_BUSY;
 
 	return N_OK;
@@ -1004,6 +1144,16 @@ n_rslt iso15765_send(iso15765_t* instance, n_req_t* frame)
  */
 n_rslt iso15765_process(iso15765_t* instance)
 {
+	if (instance == NULL)
+	{
+		return N_NULL;
+	}
+
+	if (instance->init_sts != N_OK)
+	{
+		return N_ERROR;
+	}
+
 	/* First check if a timeout is occured. Only for the inbound stream */
 	n_rslt rslt = process_timeouts(instance);
 	canbus_frame_t frame;

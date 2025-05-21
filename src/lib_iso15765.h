@@ -4,26 +4,27 @@
 @t.odo	-
 ---------------------------------------------------------------------------
 
-MIT License
-Copyright (c) 2020 Io. D (Devcoons.com)
+GNU Affero General Public License v3.0  
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Copyright (c) 2024 Ioannis D. (devcoons)  
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This program is free software: you can redistribute it and/or modify it 
+under the terms of the GNU Affero General Public License as published by 
+the Free Software Foundation, either version 3 of the License.  
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This program is distributed in the hope that it will be useful,  
+but WITHOUT ANY WARRANTY; without even the implied warranty of  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the  
+GNU Affero General Public License for more details.  
+
+You should have received a copy of the GNU Affero General Public License  
+along with this program. If not, see <https://www.gnu.org/licenses/>.  
+
+For commercial use, including proprietary or for-profit applications, 
+a separate license is required. Contact:  
+
+- GitHub: [https://github.com/devcoons](https://github.com/devcoons)  
+- Email: i_-_-_s@outlook.com 
 */
 /******************************************************************************
 * Preprocessor Definitions & Macros
@@ -49,7 +50,6 @@ SOFTWARE.
 #ifndef ISO_15675_UNUSED
 	#define ISO_15675_UNUSED(x) ((void)(x))
 #endif
-
 
 /******************************************************************************
  * Includes
@@ -374,6 +374,7 @@ typedef struct ALIGNMENT
 	n_pdu_t pdu;			/* Keep information about the in/out frame in a PDU format */
 	uint8_t cf_cnt;			/* Current block sequence number (ConsecutiveFrame) */
 	uint8_t wf_cnt;			/* Current received wait flow control frames */
+	uint8_t sn_glb;			/* Current Sequence Number of the transmittion */
 	uint8_t cfg_wf;			/* Max supported Wait Flow Control frames */
 	uint8_t stmin;			/* Frames transmission rate */
 	uint8_t cfg_bs;			/* Max. supported block sequence (ConsecutiveFrame) */
@@ -399,6 +400,7 @@ typedef struct ALIGNMENT
 
 typedef struct ALIGNMENT
 {
+	n_rslt init_sts; 		/* Instance is initialized correctly */
 	addr_md addr_md;		/* Selected address mode of the TP */
 	cbus_id_type fr_id_type;	/* CANBus frame Id Type */
 	n_iostream_t in;		/* Incoming data stream (reception) */
